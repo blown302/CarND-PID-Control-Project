@@ -40,7 +40,8 @@ The implementation of the actual `PID` controller was quite straight forward and
 It was quite easy to keep the car on the track at the default speed by keep the `Kp` parameter low to prevent over-correction
 and tweak the `Kd` value to iron out oscillation.
 
-In order to optimize the parameters a Tuner class was implemented based on the  `Twiddle` algorithm. 
+In order to optimize the parameters a Tuner class was implemented based on the  `Twiddle` algorithm. The manual tuning 
+seemed smoother but had much more error. 
 
--0.3
--6.9
+A [screen capture](https://www.youtube.com/watch?v=sba_5c4l2UM&feature=youtu.be) of of the simulator tuned by the Tuner class
+and throttle set at `.6`. 
