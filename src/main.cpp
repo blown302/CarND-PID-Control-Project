@@ -2,6 +2,7 @@
 #include <iostream>
 #include "json.hpp"
 #include "PID.h"
+#include "tuning.h"
 #include <math.h>
 
 // for convenience
@@ -33,12 +34,17 @@ int main()
   uWS::Hub h;
 
   PID pid;
-  double Kp = -.09;
-  double Ki = 0;
-  double Kd = -1;
+  double Kp = -0.741215;
+  double Ki = 0.;
+  double Kd = -52.434;
   pid.Init(Kp, Ki, Kd);
+  auto count = 0;
+  const unsigned int count_interval_to_eval = 3000;
+  const bool tune_params = false;
+  bool session_reset = false;
+  Tuner tuner(pid.Kp, pid.Kd);
 
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid, &count, &tuner, &session_reset](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -51,8 +57,6 @@ int main()
         if (event == "telemetry") {
           // j[1] is the data JSON object
           double cte = std::stod(j[1]["cte"].get<std::string>());
-          double speed = std::stod(j[1]["speed"].get<std::string>());
-          double angle = std::stod(j[1]["steering_angle"].get<std::string>());
           double steer_value;
           /*
           * TODO: Calcuate steering value here, remember the steering value is
@@ -60,18 +64,35 @@ int main()
           * NOTE: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
           */
-
           pid.UpdateError(cte);
-          steer_value = pid.TotalError();
-          
+          if (tune_params && !session_reset) {
+
+            tuner.updateParamError(pow(abs(cte), 2));
+            count++;
+            if (count % count_interval_to_eval == 0) {
+              tuner.evaluate();
+              auto newParams = tuner.getParam();
+              pid.Kp = newParams[0];
+              pid.Kd = newParams[1];
+              pid.reset();
+              session_reset = true;
+              cout << "restart session" << endl;
+              cin.get();
+              cout << "restarting session" << endl;
+              session_reset = false;
+            }
+          }
+
+	  steer_value = pid.TotalError();
+
           // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          //std::cout << "CTE: " << cte << " Steering Value: " << steer_value << "message number: " << count << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+          msgJson["throttle"] = 0.6;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
@@ -97,11 +118,11 @@ int main()
     }
   });
 
-  h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
+  h.onConnection([](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
   });
 
-  h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
+  h.onDisconnection([](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
     ws.close();
     std::cout << "Disconnected" << std::endl;
   });
